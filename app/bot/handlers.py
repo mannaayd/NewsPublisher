@@ -120,6 +120,9 @@ def router_for(settings, db, scrapit, deepseek):
         extra = f"\n\nПоследнее сообщение в канале: {publication['message_id']}" if publication else ""
         text += extra
         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit:{draft_id}"), InlineKeyboardButton(text="✍️ Переписать с промптом", callback_data=f"rewrite:{draft_id}")],[InlineKeyboardButton(text=publish_label, callback_data=f"publish:{draft_id}"),InlineKeyboardButton(text="🗑 Удалить", callback_data=f"delete:{draft_id}")]])
+        if draft["image_url"]:
+            try: await message.answer_photo(draft["image_url"], caption="Изображение для этой статьи")
+            except Exception: pass
         await message.answer(text, parse_mode="HTML", disable_web_page_preview=True, reply_markup=kb)
     @router.callback_query(F.data.startswith("rewrite:"))
     async def rewrite_start(call: CallbackQuery, state: FSMContext):
@@ -156,10 +159,39 @@ def router_for(settings, db, scrapit, deepseek):
     async def publish(call: CallbackQuery):
         if not allowed(call.from_user.id): return
         draft = await db.get_draft(int(call.data.split(":")[1]))
-        if draft["image_url"]:
+        if draft["image_url"] and len(draft["body_html"]) > 900:
+            await call.answer("Выберите формат публикации")
+            return await call.message.answer("Пост с картинкой ограничен по длине подписи. Выберите вариант:", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🖼 С картинкой", callback_data=f"publish_mode:image:{draft['id']}"), InlineKeyboardButton(text="📝 Длинный текст без картинки", callback_data=f"publish_mode:text:{draft['id']}")]]))
+        return await publish_draft(call, draft, with_image=bool(draft["image_url"]))
+
+    @router.callback_query(F.data.startswith("publish_mode:"))
+    async def publish_mode(call: CallbackQuery):
+        if not allowed(call.from_user.id): return
+        _, mode, draft_id = call.data.split(":")
+        draft = await db.get_draft(int(draft_id))
+        await call.answer("Публикую…")
+        if mode == "image" and len(draft["body_html"]) > 900:
+            article = await db.get_article(draft["news_id"])
+            if article:
+                base = await db.get_setting("deepseek_prompt", deepseek_service.SYSTEM)
+                generated = await deepseek(draft["title"], article["article_text"], draft["source_url"], f"{base}\n\nСделай короткую версию для публикации с изображением. Уложись максимум в 850 символов HTML-текста, сохрани ключевые факты.")
+                await db.update_draft_content(draft["id"], generated["title"], generated["body_html"], draft["image_url"])
+                draft = await db.get_draft(draft["id"])
+        return await publish_draft(call, draft, with_image=mode == "image")
+
+    async def publish_draft(call, draft, with_image):
+        post_text = f"{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за бугром. Подписаться.</a>"
+        if with_image and draft["image_url"]:
             image_path = await download_image(draft["image_url"], "./data/images", f"draft-{draft['id']}")
-            sent = await call.bot.send_photo(settings.telegram_channel_id, FSInputFile(image_path), caption=f"{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за бугром. Подписаться.</a>", parse_mode="HTML")
+            if len(post_text) > 1024:
+                return await call.message.answer("Не удалось сократить текст для публикации с изображением. Выберите публикацию без картинки.")
+            caption = post_text
+            sent = await call.bot.send_photo(settings.telegram_channel_id, FSInputFile(image_path), caption=caption, parse_mode="HTML")
         else:
-            sent = await call.bot.send_message(settings.telegram_channel_id, f"{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за бугром. Подписаться.</a>", parse_mode="HTML", disable_web_page_preview=True)
+            if len(post_text) <= 4096:
+                sent = await call.bot.send_message(settings.telegram_channel_id, post_text, parse_mode="HTML", disable_web_page_preview=True)
+            else:
+                sent = await call.bot.send_message(settings.telegram_channel_id, post_text[:4090], parse_mode="HTML", disable_web_page_preview=True)
+                await call.bot.send_message(settings.telegram_channel_id, post_text[4090:], parse_mode="HTML", disable_web_page_preview=True)
         await db.mark_published(draft["id"], settings.telegram_channel_id, sent.message_id); await call.message.answer("✅ Опубликовано в канале.")
     return router
