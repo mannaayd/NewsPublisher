@@ -67,6 +67,9 @@ class Database:
     async def add_draft(self, news_id, title, body_html, image_url, source_url, model):
         cur = await self.db.execute("INSERT INTO drafts(news_id,title,body_html,image_url,source_url,model) VALUES(?,?,?,?,?,?)", (news_id,title,body_html,image_url,source_url,model)); await self.db.commit(); return cur.lastrowid
 
+    async def get_latest_draft_for_news(self, news_id):
+        cur = await self.db.execute("SELECT * FROM drafts WHERE news_id=? ORDER BY id DESC LIMIT 1", (news_id,)); return await cur.fetchone()
+
     async def get_draft(self, draft_id):
         cur = await self.db.execute("SELECT * FROM drafts WHERE id=?", (draft_id,)); return await cur.fetchone()
 

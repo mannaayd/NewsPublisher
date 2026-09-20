@@ -85,7 +85,14 @@ def router_for(settings, db, scrapit, deepseek):
     @router.callback_query(F.data.startswith("select:"))
     async def select(call: CallbackQuery):
         if not allowed(call.from_user.id): return
-        row = await db.get_news(int(call.data.split(":")[1])); await call.answer("Извлекаю статью…")
+        row = await db.get_news(int(call.data.split(":")[1]))
+        if not row: return await call.answer("Новость не найдена.", show_alert=True)
+        if row["status"] == "draft":
+            existing = await db.get_latest_draft_for_news(row["id"])
+            if existing: await call.answer("Для этой новости уже создан черновик."); return await show_draft(call.message, db, existing["id"])
+        if row["status"] in {"extracting", "generating", "extracted", "published", "selected"}:
+            return await call.answer("Эта новость уже обрабатывается или была опубликована.", show_alert=True)
+        await db.set_news_status(row["id"], "selected"); await call.answer("Извлекаю статью…")
         try:
             article = await scrapit(row["url"]); await db.save_article(row["id"], article["text"], article["html"]); await db.set_news_status(row["id"], "extracted")
             prompt = await db.get_setting("deepseek_prompt", deepseek_service.SYSTEM)
