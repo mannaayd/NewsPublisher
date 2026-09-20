@@ -1,10 +1,14 @@
 import feedparser
 import httpx
 import re
+import time
 
 async def fetch(url: str) -> list[dict]:
-    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
-        response = await client.get(url); response.raise_for_status()
+    separator = "&" if "?" in url else "?"
+    fresh_url = f"{url}{separator}_rss_refresh={int(time.time())}"
+    headers = {"Cache-Control": "no-cache, no-store", "Pragma": "no-cache", "User-Agent": "NewsPublisher/1.0"}
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True, headers=headers) as client:
+        response = await client.get(fresh_url); response.raise_for_status()
     parsed = feedparser.parse(response.text)
     result = []
     for entry in parsed.entries:
