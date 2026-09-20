@@ -120,7 +120,7 @@ def router_for(settings, db, scrapit, deepseek):
         extra = f"\n\nПоследнее сообщение в канале: {publication['message_id']}" if publication else ""
         text += extra
         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit:{draft_id}"), InlineKeyboardButton(text="✍️ Переписать с промптом", callback_data=f"rewrite:{draft_id}")],[InlineKeyboardButton(text=publish_label, callback_data=f"publish:{draft_id}"),InlineKeyboardButton(text="🗑 Удалить", callback_data=f"delete:{draft_id}")]])
-        await message.answer(text, parse_mode="HTML", reply_markup=kb)
+        await message.answer(text, parse_mode="HTML", disable_web_page_preview=True, reply_markup=kb)
     @router.callback_query(F.data.startswith("rewrite:"))
     async def rewrite_start(call: CallbackQuery, state: FSMContext):
         if not allowed(call.from_user.id): return
@@ -160,6 +160,6 @@ def router_for(settings, db, scrapit, deepseek):
             image_path = await download_image(draft["image_url"], "./data/images", f"draft-{draft['id']}")
             sent = await call.bot.send_photo(settings.telegram_channel_id, FSInputFile(image_path), caption=f"{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за бугром. Подписаться.</a>", parse_mode="HTML")
         else:
-            sent = await call.bot.send_message(settings.telegram_channel_id, f"{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за бугром. Подписаться.</a>", parse_mode="HTML", disable_web_page_preview=False)
+            sent = await call.bot.send_message(settings.telegram_channel_id, f"{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за бугром. Подписаться.</a>", parse_mode="HTML", disable_web_page_preview=True)
         await db.mark_published(draft["id"], settings.telegram_channel_id, sent.message_id); await call.message.answer("✅ Опубликовано в канале.")
     return router
