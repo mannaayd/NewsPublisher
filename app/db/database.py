@@ -58,6 +58,12 @@ class Database:
     async def set_news_status(self, news_id, status):
         await self.db.execute("UPDATE news SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", (status, news_id)); await self.db.commit()
 
+    async def save_article(self, news_id, text, html):
+        await self.db.execute("INSERT INTO articles(news_id,article_text,article_html) VALUES(?,?,?)", (news_id, text, html)); await self.db.commit()
+
+    async def get_article(self, news_id):
+        cur = await self.db.execute("SELECT * FROM articles WHERE news_id=? ORDER BY id DESC LIMIT 1", (news_id,)); return await cur.fetchone()
+
     async def add_draft(self, news_id, title, body_html, image_url, source_url, model):
         cur = await self.db.execute("INSERT INTO drafts(news_id,title,body_html,image_url,source_url,model) VALUES(?,?,?,?,?,?)", (news_id,title,body_html,image_url,source_url,model)); await self.db.commit(); return cur.lastrowid
 
@@ -66,6 +72,9 @@ class Database:
 
     async def update_draft(self, draft_id, body_html):
         await self.db.execute("UPDATE drafts SET body_html=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", (body_html,draft_id)); await self.db.commit()
+
+    async def update_draft_content(self, draft_id, title, body_html, image_url=None):
+        await self.db.execute("UPDATE drafts SET title=?,body_html=?,image_url=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", (title, body_html, image_url, draft_id)); await self.db.commit()
 
     async def delete_draft(self, draft_id):
         await self.db.execute("DELETE FROM drafts WHERE id=? AND status='draft'", (draft_id,)); await self.db.commit()

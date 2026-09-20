@@ -10,6 +10,7 @@ from app.services import deepseek as deepseek_service
 class EditState(StatesGroup):
     body = State()
     prompt = State()
+    rewrite_prompt = State()
 
 def clean_html(value: str) -> str:
     value = re.sub(r"<(?!/?(?:b|strong|i|em|u|s|a|code)(?:\s|>|/))[^>]+>", "", value, flags=re.I)
@@ -86,7 +87,7 @@ def router_for(settings, db, scrapit, deepseek):
         if not allowed(call.from_user.id): return
         row = await db.get_news(int(call.data.split(":")[1])); await call.answer("Извлекаю статью…")
         try:
-            article = await scrapit(row["url"]); await db.set_news_status(row["id"], "extracted")
+            article = await scrapit(row["url"]); await db.save_article(row["id"], article["text"], article["html"]); await db.set_news_status(row["id"], "extracted")
             prompt = await db.get_setting("deepseek_prompt", deepseek_service.SYSTEM)
             generated = await deepseek(row["title"], article["text"], row["url"], prompt)
             draft_id = await db.add_draft(row["id"], generated["title"], generated["body_html"], generated.get("image_url"), row["url"], settings.deepseek_model)
@@ -94,8 +95,27 @@ def router_for(settings, db, scrapit, deepseek):
         except Exception as exc: await call.message.answer(f"Не удалось подготовить статью: {escape(str(exc))}")
     async def show_draft(message, db, draft_id):
         draft = await db.get_draft(draft_id); text = f"<b>Предпросмотр</b>\n\n{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за кордоном. Подписаться.</a>"
-        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit:{draft_id}")],[InlineKeyboardButton(text="✅ Опубликовать", callback_data=f"publish:{draft_id}"),InlineKeyboardButton(text="🗑 Удалить", callback_data=f"delete:{draft_id}")]])
+        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit:{draft_id}"), InlineKeyboardButton(text="✍️ Переписать с промптом", callback_data=f"rewrite:{draft_id}")],[InlineKeyboardButton(text="✅ Опубликовать", callback_data=f"publish:{draft_id}"),InlineKeyboardButton(text="🗑 Удалить", callback_data=f"delete:{draft_id}")]])
         await message.answer(text, parse_mode="HTML", reply_markup=kb)
+    @router.callback_query(F.data.startswith("rewrite:"))
+    async def rewrite_start(call: CallbackQuery, state: FSMContext):
+        if not allowed(call.from_user.id): return
+        await state.set_state(EditState.rewrite_prompt); await state.update_data(draft_id=int(call.data.split(":")[1]))
+        await call.message.answer("Пришлите дополнительный промпт для переписывания. Например: «Сделай текст короче и добавь больше контекста».")
+    @router.message(EditState.rewrite_prompt)
+    async def rewrite_apply(message: Message, state: FSMContext):
+        if not allowed(message.from_user.id): return
+        data = await state.get_data(); draft = await db.get_draft(data["draft_id"]); article = await db.get_article(draft["news_id"])
+        custom_prompt = (message.text or "").strip()
+        if not article or not custom_prompt: return await message.answer("Не удалось найти статью или пользовательский промпт пуст.")
+        await message.answer("Переписываю пост с вашим промптом…")
+        try:
+            base = await db.get_setting("deepseek_prompt", deepseek_service.SYSTEM)
+            generated = await deepseek(draft["title"], article["article_text"], draft["source_url"], f"{base}\n\nДополнительная инструкция администратора:\n{custom_prompt}")
+            await db.update_draft_content(draft["id"], generated["title"], generated["body_html"], generated.get("image_url"))
+            await state.clear(); await show_draft(message, db, draft["id"])
+        except Exception as exc:
+            await state.clear(); await message.answer(f"Не удалось переписать пост: {escape(str(exc))}")
     @router.callback_query(F.data.startswith("edit:"))
     async def edit(call: CallbackQuery, state: FSMContext):
         if not allowed(call.from_user.id): return
