@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -24,6 +24,27 @@ def router_for(settings, db, scrapit, deepseek):
     async def start(message: Message):
         if not allowed(message.from_user.id): return await message.answer("У вас нет доступа к этому боту.")
         await message.answer("Панель управления новостями", reply_markup=menu())
+    @router.message(Command("news"))
+    async def news_command(message: Message):
+        if not allowed(message.from_user.id): return await message.answer("У вас нет доступа к этому боту.")
+        rows = await db.list_news(5, 0)
+        if not rows: return await message.answer("Новых новостей нет.", reply_markup=menu())
+        buttons = [[InlineKeyboardButton(text=f"Выбрать: {row['title'][:35]}", callback_data=f"select:{row['id']}")] for row in rows]
+        text = "Новые новости:\n\n" + "\n\n".join(f"<b>{escape(row['title'])}</b>" for row in rows)
+        await message.answer(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    @router.message(Command("refresh"))
+    async def refresh_command(message: Message):
+        if not allowed(message.from_user.id): return
+        count = 0
+        for item in await __import__("app.services.rss", fromlist=["fetch"]).fetch(settings.rss_feed_url): count += await db.add_news(item)
+        await message.answer(f"RSS обновлён. Добавлено новостей: {count}", reply_markup=menu())
+    @router.message(Command("settings"))
+    async def settings_command(message: Message):
+        if not allowed(message.from_user.id): return
+        await message.answer("Настройки бота", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✏️ Промпт DeepSeek", callback_data="prompt:edit")]]))
+    @router.message(Command("cancel"))
+    async def cancel_command(message: Message, state: FSMContext):
+        if allowed(message.from_user.id): await state.clear(); await message.answer("Действие отменено.", reply_markup=menu())
     @router.callback_query(F.data == "rss")
     async def refresh(call: CallbackQuery):
         if not allowed(call.from_user.id): return

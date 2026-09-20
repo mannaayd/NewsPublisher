@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
+from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats
 from app.config import Settings
 from app.db.database import Database
 from app.services.scrapit import extract
@@ -21,6 +22,13 @@ async def main():
     settings = Settings()
     db = Database(settings.database_url); await db.connect()
     bot = Bot(settings.telegram_bot_token)
+    await bot.set_my_commands([
+        BotCommand(command="start", description="Открыть панель управления"),
+        BotCommand(command="news", description="Показать новые новости"),
+        BotCommand(command="refresh", description="Обновить RSS"),
+        BotCommand(command="settings", description="Настройки бота"),
+        BotCommand(command="cancel", description="Отменить текущее действие"),
+    ], scope=BotCommandScopeAllPrivateChats())
     dp = Dispatcher()
     dp.include_router(router_for(settings, db, lambda url: extract(settings.scrapit_base_url, url), lambda title, text, url, prompt=None: generate(settings.deepseek_api_key, settings.deepseek_model, title, text, url, prompt)))
     poller = asyncio.create_task(poll_rss(settings, db))
