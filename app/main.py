@@ -23,6 +23,7 @@ async def poll_rss(settings, db, bot):
                         for admin_id in settings.admin_ids:
                             await bot.send_message(admin_id, f"📰 <b>Новая статья</b>\n\n<b>{escape(item['title'])}</b>\n\n<a href=\"{item['url']}\">Открыть статью</a>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Выбрать", callback_data=f"select:{row['id']}"), InlineKeyboardButton(text="Пропустить", callback_data=f"skip:{row['id']}")]]))
                         await db.mark_notified(row["id"])
+            await db.cleanup_old_articles(days=2)
         except Exception: logging.exception("RSS update failed")
         jitter = random.uniform(-120, 120)
         await asyncio.sleep(max(60, settings.rss_poll_interval_seconds + jitter))

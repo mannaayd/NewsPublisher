@@ -63,6 +63,23 @@ class Database:
     async def mark_notified(self, news_id):
         await self.db.execute("UPDATE news SET notified=1,updated_at=CURRENT_TIMESTAMP WHERE id=?", (news_id,)); await self.db.commit()
 
+    async def cleanup_old_articles(self, days=2):
+        cur = await self.db.execute("SELECT id FROM news WHERE created_at < datetime('now', ?)", (f"-{days} days",))
+        news_ids = [row["id"] for row in await cur.fetchall()]
+        if not news_ids:
+            return 0
+        marks = ",".join("?" for _ in news_ids)
+        cur = await self.db.execute(f"SELECT id FROM drafts WHERE news_id IN ({marks})", news_ids)
+        draft_ids = [row["id"] for row in await cur.fetchall()]
+        if draft_ids:
+            draft_marks = ",".join("?" for _ in draft_ids)
+            await self.db.execute(f"DELETE FROM publications WHERE draft_id IN ({draft_marks})", draft_ids)
+            await self.db.execute(f"DELETE FROM drafts WHERE id IN ({draft_marks})", draft_ids)
+        await self.db.execute(f"DELETE FROM articles WHERE news_id IN ({marks})", news_ids)
+        await self.db.execute(f"DELETE FROM news WHERE id IN ({marks})", news_ids)
+        await self.db.commit()
+        return len(news_ids)
+
     async def list_news(self, limit=10, offset=0):
         cur = await self.db.execute("SELECT * FROM news WHERE status='new' ORDER BY COALESCE(published_at, created_at) DESC LIMIT ? OFFSET ?", (limit, offset))
         return await cur.fetchall()
