@@ -1,0 +1,32 @@
+services:
+  news-channel-bot:
+    image: news-channel:local
+    build:
+      context: .
+    container_name: news-channel-bot
+    user: "1000:1000"
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      SCRAPIT_BASE_URL: http://scrapit-adapter:7331
+      DATABASE_URL: /app/data/news.db
+    volumes:
+      - ./data:/app/data
+    networks:
+      - scrapit
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.50"
+
+networks:
+  scrapit:
+    external: true
+    name: scrapit_default
