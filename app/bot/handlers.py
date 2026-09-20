@@ -6,6 +6,8 @@ from aiogram.fsm.state import State, StatesGroup
 from html import escape
 import re
 from app.services import deepseek as deepseek_service
+from app.services.images import download_image
+from aiogram.types import FSInputFile
 
 class EditState(StatesGroup):
     body = State()
@@ -103,7 +105,7 @@ def router_for(settings, db, scrapit, deepseek):
             article = await scrapit(row["url"]); await db.save_article(row["id"], article["text"], article["html"]); await db.set_news_status(row["id"], "extracted")
             prompt = await db.get_setting("deepseek_prompt", deepseek_service.SYSTEM)
             generated = await deepseek(row["title"], article["text"], row["url"], prompt)
-            draft_id = await db.add_draft(row["id"], generated["title"], generated["body_html"], generated.get("image_url"), row["url"], settings.deepseek_model)
+            draft_id = await db.add_draft(row["id"], generated["title"], generated["body_html"], generated.get("image_url") or row["image_url"], row["url"], settings.deepseek_model)
             await db.set_news_status(row["id"], "draft"); await show_draft(call.message, db, draft_id)
         except Exception as exc: await call.message.answer(f"Не удалось подготовить статью: {escape(str(exc))}")
     @router.callback_query(F.data.startswith("skip:"))
@@ -155,7 +157,8 @@ def router_for(settings, db, scrapit, deepseek):
         if not allowed(call.from_user.id): return
         draft = await db.get_draft(int(call.data.split(":")[1]))
         if draft["image_url"]:
-            sent = await call.bot.send_photo(settings.telegram_channel_id, draft["image_url"], caption=f"{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за кордоном. Подписаться.</a>", parse_mode="HTML")
+            image_path = await download_image(draft["image_url"], "./data/images", f"draft-{draft['id']}")
+            sent = await call.bot.send_photo(settings.telegram_channel_id, FSInputFile(image_path), caption=f"{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за кордоном. Подписаться.</a>", parse_mode="HTML")
         else:
             sent = await call.bot.send_message(settings.telegram_channel_id, f"{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за кордоном. Подписаться.</a>", parse_mode="HTML", disable_web_page_preview=False)
         await db.mark_published(draft["id"], settings.telegram_channel_id, sent.message_id); await call.message.answer("✅ Опубликовано в канале.")
