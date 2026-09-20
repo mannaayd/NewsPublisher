@@ -25,6 +25,14 @@ class Database:
           created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY(news_id) REFERENCES news(id)
         );
+        CREATE TABLE IF NOT EXISTS articles (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          news_id INTEGER NOT NULL,
+          article_text TEXT NOT NULL,
+          article_html TEXT,
+          extracted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(news_id) REFERENCES news(id)
+        );
         CREATE TABLE IF NOT EXISTS publications (
           id INTEGER PRIMARY KEY AUTOINCREMENT, draft_id INTEGER NOT NULL,
           chat_id TEXT NOT NULL, message_id INTEGER NOT NULL, published_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
