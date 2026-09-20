@@ -100,3 +100,6 @@ class Database:
     async def mark_published(self, draft_id, chat_id, message_id):
         await self.db.execute("UPDATE drafts SET status='published',updated_at=CURRENT_TIMESTAMP WHERE id=?", (draft_id,))
         await self.db.execute("INSERT INTO publications(draft_id,chat_id,message_id) VALUES(?,?,?)", (draft_id,str(chat_id),message_id)); await self.db.commit()
+
+    async def get_latest_publication(self, draft_id):
+        cur = await self.db.execute("SELECT * FROM publications WHERE draft_id=? ORDER BY id DESC LIMIT 1", (draft_id,)); return await cur.fetchone()

@@ -90,7 +90,13 @@ def router_for(settings, db, scrapit, deepseek):
         if row["status"] == "draft":
             existing = await db.get_latest_draft_for_news(row["id"])
             if existing: await call.answer("Для этой новости уже создан черновик."); return await show_draft(call.message, db, existing["id"])
-        if row["status"] in {"extracting", "generating", "extracted", "published", "selected"}:
+        if row["status"] == "published":
+            existing = await db.get_latest_draft_for_news(row["id"])
+            if existing:
+                publication = await db.get_latest_publication(existing["id"])
+                await call.answer("Статья уже публиковалась. Можно опубликовать её снова.")
+                return await show_draft(call.message, db, existing["id"], publication)
+        if row["status"] in {"extracting", "generating", "extracted", "selected"}:
             return await call.answer("Эта новость уже обрабатывается или была опубликована.", show_alert=True)
         await db.set_news_status(row["id"], "selected"); await call.answer("Извлекаю статью…")
         try:
@@ -100,9 +106,12 @@ def router_for(settings, db, scrapit, deepseek):
             draft_id = await db.add_draft(row["id"], generated["title"], generated["body_html"], generated.get("image_url"), row["url"], settings.deepseek_model)
             await db.set_news_status(row["id"], "draft"); await show_draft(call.message, db, draft_id)
         except Exception as exc: await call.message.answer(f"Не удалось подготовить статью: {escape(str(exc))}")
-    async def show_draft(message, db, draft_id):
+    async def show_draft(message, db, draft_id, publication=None):
         draft = await db.get_draft(draft_id); text = f"<b>Предпросмотр</b>\n\n{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за кордоном. Подписаться.</a>"
-        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit:{draft_id}"), InlineKeyboardButton(text="✍️ Переписать с промптом", callback_data=f"rewrite:{draft_id}")],[InlineKeyboardButton(text="✅ Опубликовать", callback_data=f"publish:{draft_id}"),InlineKeyboardButton(text="🗑 Удалить", callback_data=f"delete:{draft_id}")]])
+        publish_label = "🔁 Опубликовать снова" if publication else "✅ Опубликовать"
+        extra = f"\n\nПоследнее сообщение в канале: {publication['message_id']}" if publication else ""
+        text += extra
+        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit:{draft_id}"), InlineKeyboardButton(text="✍️ Переписать с промптом", callback_data=f"rewrite:{draft_id}")],[InlineKeyboardButton(text=publish_label, callback_data=f"publish:{draft_id}"),InlineKeyboardButton(text="🗑 Удалить", callback_data=f"delete:{draft_id}")]])
         await message.answer(text, parse_mode="HTML", reply_markup=kb)
     @router.callback_query(F.data.startswith("rewrite:"))
     async def rewrite_start(call: CallbackQuery, state: FSMContext):
