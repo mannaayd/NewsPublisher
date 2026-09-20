@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import random
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, InlineKeyboardMarkup, InlineKeyboardButton
 from html import escape
@@ -23,7 +24,8 @@ async def poll_rss(settings, db, bot):
                             await bot.send_message(admin_id, f"📰 <b>Новая статья</b>\n\n<b>{escape(item['title'])}</b>\n\n<a href=\"{item['url']}\">Открыть статью</a>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Выбрать", callback_data=f"select:{row['id']}"), InlineKeyboardButton(text="Пропустить", callback_data=f"skip:{row['id']}")]]))
                         await db.mark_notified(row["id"])
         except Exception: logging.exception("RSS update failed")
-        await asyncio.sleep(settings.rss_poll_interval_seconds)
+        jitter = random.uniform(-120, 120)
+        await asyncio.sleep(max(60, settings.rss_poll_interval_seconds + jitter))
 
 async def main():
     settings = Settings()
