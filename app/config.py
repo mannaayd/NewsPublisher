@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     scrapit_base_url: str = "http://127.0.0.1:7331"
     deepseek_api_key: str
     deepseek_model: str = "deepseek-chat"
-    subscribe_url: str = "https://t.me/"
+    subscribe_url: str = "https://t.me/novosti_za_bugrom"
     database_url: str = "./data/news.db"
     rss_poll_interval_seconds: int = 600
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

@@ -115,7 +115,7 @@ def router_for(settings, db, scrapit, deepseek):
         await call.answer("Новость пропущена")
         await call.message.edit_reply_markup(reply_markup=None)
     async def show_draft(message, db, draft_id, publication=None):
-        draft = await db.get_draft(draft_id); text = f"<b>Предпросмотр</b>\n\n{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за кордоном. Подписаться.</a>"
+        draft = await db.get_draft(draft_id); text = f"<b>Предпросмотр</b>\n\n{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за бугром. Подписаться.</a>"
         publish_label = "🔁 Опубликовать снова" if publication else "✅ Опубликовать"
         extra = f"\n\nПоследнее сообщение в канале: {publication['message_id']}" if publication else ""
         text += extra
@@ -158,8 +158,8 @@ def router_for(settings, db, scrapit, deepseek):
         draft = await db.get_draft(int(call.data.split(":")[1]))
         if draft["image_url"]:
             image_path = await download_image(draft["image_url"], "./data/images", f"draft-{draft['id']}")
-            sent = await call.bot.send_photo(settings.telegram_channel_id, FSInputFile(image_path), caption=f"{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за кордоном. Подписаться.</a>", parse_mode="HTML")
+            sent = await call.bot.send_photo(settings.telegram_channel_id, FSInputFile(image_path), caption=f"{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за бугром. Подписаться.</a>", parse_mode="HTML")
         else:
-            sent = await call.bot.send_message(settings.telegram_channel_id, f"{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за кордоном. Подписаться.</a>", parse_mode="HTML", disable_web_page_preview=False)
+            sent = await call.bot.send_message(settings.telegram_channel_id, f"{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за бугром. Подписаться.</a>", parse_mode="HTML", disable_web_page_preview=False)
         await db.mark_published(draft["id"], settings.telegram_channel_id, sent.message_id); await call.message.answer("✅ Опубликовано в канале.")
     return router
