@@ -1,7 +1,7 @@
 import json
 import httpx
 
-SYSTEM = """Ты редактор Telegram-канала. Перепиши статью на русском языке кратко и точно. Не выдумывай факты. Верни только JSON с ключами title, body_html, image_url. body_html должен использовать только Telegram HTML: b, i, u, s, a href. Добавь ссылку на источник в конце."""
+SYSTEM = """Ты редактор Telegram-канала. Перепиши статью на русском языке кратко и точно. Не выдумывай факты и не добавляй упоминание или ссылку на источник. Верни только JSON с ключами title, body_html, image_url. body_html должен использовать только Telegram HTML: b, i, u, s, a href."""
 
 async def generate(api_key: str, model: str, title: str, text: str, source_url: str) -> dict:
     payload = {"model": model, "temperature": 0.4, "response_format": {"type": "json_object"}, "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": f"Заголовок RSS: {title}\nИсточник: {source_url}\n\nТекст статьи:\n{text}"}]}

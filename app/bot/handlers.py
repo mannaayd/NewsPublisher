@@ -51,7 +51,7 @@ def router_for(settings, db, scrapit, deepseek):
             await db.set_news_status(row["id"], "draft"); await show_draft(call.message, db, draft_id)
         except Exception as exc: await call.message.answer(f"Не удалось подготовить статью: {escape(str(exc))}")
     async def show_draft(message, db, draft_id):
-        draft = await db.get_draft(draft_id); text = f"<b>Предпросмотр</b>\n\n{draft['body_html']}"
+        draft = await db.get_draft(draft_id); text = f"<b>Предпросмотр</b>\n\n{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за кордоном — подписаться</a>"
         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit:{draft_id}")],[InlineKeyboardButton(text="✅ Опубликовать", callback_data=f"publish:{draft_id}"),InlineKeyboardButton(text="🗑 Удалить", callback_data=f"delete:{draft_id}")]])
         await message.answer(text, parse_mode="HTML", reply_markup=kb)
     @router.callback_query(F.data.startswith("edit:"))
@@ -71,8 +71,8 @@ def router_for(settings, db, scrapit, deepseek):
         if not allowed(call.from_user.id): return
         draft = await db.get_draft(int(call.data.split(":")[1]))
         if draft["image_url"]:
-            sent = await call.bot.send_photo(settings.telegram_channel_id, draft["image_url"], caption=draft["body_html"], parse_mode="HTML")
+            sent = await call.bot.send_photo(settings.telegram_channel_id, draft["image_url"], caption=f"{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за кордоном — подписаться</a>", parse_mode="HTML")
         else:
-            sent = await call.bot.send_message(settings.telegram_channel_id, draft["body_html"], parse_mode="HTML", disable_web_page_preview=False)
+            sent = await call.bot.send_message(settings.telegram_channel_id, f"{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за кордоном — подписаться</a>", parse_mode="HTML", disable_web_page_preview=False)
         await db.mark_published(draft["id"], settings.telegram_channel_id, sent.message_id); await call.message.answer("✅ Опубликовано в канале.")
     return router
