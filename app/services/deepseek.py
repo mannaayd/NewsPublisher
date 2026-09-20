@@ -14,8 +14,8 @@ SYSTEM = """Ты редактор Telegram-канала. Перепиши ста
 - Верни только JSON с ключами title, body_html, image_url.
 - body_html должен использовать только Telegram HTML: b, i, u, s, a href. HTML-теги нужны только для форматирования и не считаются специальными символами текста."""
 
-async def generate(api_key: str, model: str, title: str, text: str, source_url: str) -> dict:
-    payload = {"model": model, "temperature": 0.4, "response_format": {"type": "json_object"}, "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": f"Заголовок RSS: {title}\nИсточник: {source_url}\n\nТекст статьи:\n{text}"}]}
+async def generate(api_key: str, model: str, title: str, text: str, source_url: str, system_prompt: str | None = None) -> dict:
+    payload = {"model": model, "temperature": 0.4, "response_format": {"type": "json_object"}, "messages": [{"role": "system", "content": system_prompt or SYSTEM}, {"role": "user", "content": f"Заголовок RSS: {title}\nИсточник: {source_url}\n\nТекст статьи:\n{text}"}]}
     async with httpx.AsyncClient(timeout=90) as client:
         response = await client.post("https://api.deepseek.com/chat/completions", headers={"Authorization": f"Bearer {api_key}"}, json=payload)
         response.raise_for_status(); data = response.json()

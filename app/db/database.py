@@ -29,6 +29,9 @@ class Database:
           id INTEGER PRIMARY KEY AUTOINCREMENT, draft_id INTEGER NOT NULL,
           chat_id TEXT NOT NULL, message_id INTEGER NOT NULL, published_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS settings (
+          key TEXT PRIMARY KEY, value TEXT NOT NULL
+        );
         """)
         await self.db.commit()
 
@@ -66,6 +69,13 @@ class Database:
 
     async def delete_draft(self, draft_id):
         await self.db.execute("DELETE FROM drafts WHERE id=? AND status='draft'", (draft_id,)); await self.db.commit()
+
+    async def get_setting(self, key, default=None):
+        cur = await self.db.execute("SELECT value FROM settings WHERE key=?", (key,)); row = await cur.fetchone()
+        return row["value"] if row else default
+
+    async def set_setting(self, key, value):
+        await self.db.execute("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value)); await self.db.commit()
 
     async def mark_published(self, draft_id, chat_id, message_id):
         await self.db.execute("UPDATE drafts SET status='published',updated_at=CURRENT_TIMESTAMP WHERE id=?", (draft_id,))

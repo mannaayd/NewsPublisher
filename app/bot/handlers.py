@@ -5,9 +5,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from html import escape
 import re
+from app.services import deepseek as deepseek_service
 
 class EditState(StatesGroup):
     body = State()
+    prompt = State()
 
 def clean_html(value: str) -> str:
     value = re.sub(r"<(?!/?(?:b|strong|i|em|u|s|a|code)(?:\s|>|/))[^>]+>", "", value, flags=re.I)
@@ -17,7 +19,7 @@ def clean_html(value: str) -> str:
 def router_for(settings, db, scrapit, deepseek):
     router = Router()
     def allowed(user_id): return user_id in settings.admin_ids
-    def menu(): return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📰 Новые новости", callback_data="news:0")],[InlineKeyboardButton(text="🔄 Обновить RSS", callback_data="rss")]])
+    def menu(): return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📰 Новые новости", callback_data="news:0")],[InlineKeyboardButton(text="🔄 Обновить RSS", callback_data="rss")],[InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings")]])
     @router.message(CommandStart())
     async def start(message: Message):
         if not allowed(message.from_user.id): return await message.answer("У вас нет доступа к этому боту.")
@@ -28,6 +30,24 @@ def router_for(settings, db, scrapit, deepseek):
         count = 0
         for item in await __import__("app.services.rss", fromlist=["fetch"]).fetch(settings.rss_feed_url): count += await db.add_news(item)
         await call.answer(f"Добавлено: {count}"); await call.message.edit_text("RSS обновлён", reply_markup=menu())
+    @router.callback_query(F.data == "settings")
+    async def settings_menu(call: CallbackQuery):
+        if not allowed(call.from_user.id): return
+        await call.message.edit_text("Настройки бота", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✏️ Промпт DeepSeek", callback_data="prompt:edit")],[InlineKeyboardButton(text="↩️ В меню", callback_data="home")]]))
+    @router.callback_query(F.data == "prompt:edit")
+    async def prompt_edit(call: CallbackQuery, state: FSMContext):
+        if not allowed(call.from_user.id): return
+        prompt = await db.get_setting("deepseek_prompt", deepseek_service.SYSTEM)
+        await state.set_state(EditState.prompt); await call.message.answer(f"Текущий промпт:\n\n{prompt}\n\nПришлите новый промпт одним сообщением.")
+    @router.message(EditState.prompt)
+    async def prompt_save(message: Message, state: FSMContext):
+        if not allowed(message.from_user.id): return
+        prompt = (message.text or "").strip()
+        if len(prompt) < 50: return await message.answer("Промпт слишком короткий. Пришлите более подробную инструкцию.")
+        await db.set_setting("deepseek_prompt", prompt); await state.clear(); await message.answer("✅ Промпт сохранён.", reply_markup=menu())
+    @router.callback_query(F.data == "home")
+    async def home(call: CallbackQuery):
+        if allowed(call.from_user.id): await call.message.edit_text("Панель управления новостями", reply_markup=menu())
     @router.callback_query(F.data.startswith("news:"))
     async def list_news(call: CallbackQuery):
         if not allowed(call.from_user.id): return
@@ -46,7 +66,8 @@ def router_for(settings, db, scrapit, deepseek):
         row = await db.get_news(int(call.data.split(":")[1])); await call.answer("Извлекаю статью…")
         try:
             article = await scrapit(row["url"]); await db.set_news_status(row["id"], "extracted")
-            generated = await deepseek(row["title"], article["text"], row["url"])
+            prompt = await db.get_setting("deepseek_prompt", deepseek_service.SYSTEM)
+            generated = await deepseek(row["title"], article["text"], row["url"], prompt)
             draft_id = await db.add_draft(row["id"], generated["title"], generated["body_html"], generated.get("image_url"), row["url"], settings.deepseek_model)
             await db.set_news_status(row["id"], "draft"); await show_draft(call.message, db, draft_id)
         except Exception as exc: await call.message.answer(f"Не удалось подготовить статью: {escape(str(exc))}")
