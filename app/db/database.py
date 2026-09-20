@@ -16,7 +16,8 @@ class Database:
           id INTEGER PRIMARY KEY AUTOINCREMENT, guid TEXT UNIQUE NOT NULL,
           url TEXT NOT NULL, title TEXT NOT NULL, description TEXT,
           published_at TEXT, image_url TEXT, status TEXT NOT NULL DEFAULT 'new',
-          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          notified INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS drafts (
           id INTEGER PRIMARY KEY AUTOINCREMENT, news_id INTEGER NOT NULL,
@@ -41,6 +42,10 @@ class Database:
           key TEXT PRIMARY KEY, value TEXT NOT NULL
         );
         """)
+        try:
+            await self.db.execute("ALTER TABLE news ADD COLUMN notified INTEGER NOT NULL DEFAULT 0")
+        except aiosqlite.OperationalError:
+            pass
         await self.db.commit()
 
     async def close(self):
@@ -55,6 +60,9 @@ class Database:
         except aiosqlite.IntegrityError:
             return False
 
+    async def mark_notified(self, news_id):
+        await self.db.execute("UPDATE news SET notified=1,updated_at=CURRENT_TIMESTAMP WHERE id=?", (news_id,)); await self.db.commit()
+
     async def list_news(self, limit=10, offset=0):
         cur = await self.db.execute("SELECT * FROM news WHERE status='new' ORDER BY COALESCE(published_at, created_at) DESC LIMIT ? OFFSET ?", (limit, offset))
         return await cur.fetchall()
@@ -62,6 +70,9 @@ class Database:
     async def get_news(self, news_id):
         cur = await self.db.execute("SELECT * FROM news WHERE id=?", (news_id,))
         return await cur.fetchone()
+
+    async def get_news_by_url(self, url):
+        cur = await self.db.execute("SELECT * FROM news WHERE url=?", (url,)); return await cur.fetchone()
 
     async def set_news_status(self, news_id, status):
         await self.db.execute("UPDATE news SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", (status, news_id)); await self.db.commit()

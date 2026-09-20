@@ -106,6 +106,12 @@ def router_for(settings, db, scrapit, deepseek):
             draft_id = await db.add_draft(row["id"], generated["title"], generated["body_html"], generated.get("image_url"), row["url"], settings.deepseek_model)
             await db.set_news_status(row["id"], "draft"); await show_draft(call.message, db, draft_id)
         except Exception as exc: await call.message.answer(f"Не удалось подготовить статью: {escape(str(exc))}")
+    @router.callback_query(F.data.startswith("skip:"))
+    async def skip(call: CallbackQuery):
+        if not allowed(call.from_user.id): return
+        await db.set_news_status(int(call.data.split(":")[1]), "skipped")
+        await call.answer("Новость пропущена")
+        await call.message.edit_reply_markup(reply_markup=None)
     async def show_draft(message, db, draft_id, publication=None):
         draft = await db.get_draft(draft_id); text = f"<b>Предпросмотр</b>\n\n{draft['body_html']}\n\n<a href=\"{settings.subscribe_url}\">Новости за кордоном. Подписаться.</a>"
         publish_label = "🔁 Опубликовать снова" if publication else "✅ Опубликовать"
