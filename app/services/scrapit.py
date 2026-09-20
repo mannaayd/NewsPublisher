@@ -1,4 +1,5 @@
 import httpx
+import re
 
 async def extract(base_url: str, url: str) -> dict:
     async with httpx.AsyncClient(timeout=40) as client:
@@ -8,4 +9,10 @@ async def extract(base_url: str, url: str) -> dict:
     element = data.get("results", {}).get("article", {}).get("elements", [{}])[0]
     text = element.get("text", "").strip()
     if not text: raise ValueError("Scrapit вернул пустой текст статьи")
-    return {"text": text, "html": element.get("html", "")}
+    html = element.get("html", "")
+    image = None
+    match = re.search(r'<img[^>]+(?:src|data-src)=["\']([^"\']+)', html, re.I)
+    if match:
+        image = match.group(1)
+        if image.startswith("//"): image = "https:" + image
+    return {"text": text, "html": html, "image_url": image}

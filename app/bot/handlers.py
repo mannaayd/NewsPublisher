@@ -105,7 +105,7 @@ def router_for(settings, db, scrapit, deepseek):
             article = await scrapit(row["url"]); await db.save_article(row["id"], article["text"], article["html"]); await db.set_news_status(row["id"], "extracted")
             prompt = await db.get_setting("deepseek_prompt", deepseek_service.SYSTEM)
             generated = await deepseek(row["title"], article["text"], row["url"], prompt)
-            draft_id = await db.add_draft(row["id"], generated["title"], generated["body_html"], generated.get("image_url") or row["image_url"], row["url"], settings.deepseek_model)
+            draft_id = await db.add_draft(row["id"], generated["title"], generated["body_html"], generated.get("image_url") or row["image_url"] or article.get("image_url"), row["url"], settings.deepseek_model)
             await db.set_news_status(row["id"], "draft"); await show_draft(call.message, db, draft_id)
         except Exception as exc: await call.message.answer(f"Не удалось подготовить статью: {escape(str(exc))}")
     @router.callback_query(F.data.startswith("skip:"))
