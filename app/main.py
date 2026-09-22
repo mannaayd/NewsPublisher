@@ -14,15 +14,17 @@ from app.services.rss import fetch
 logging.basicConfig(level=logging.INFO)
 
 async def poll_rss(settings, db, bot):
+    async def notify(row):
+        for admin_id in settings.admin_ids:
+            await bot.send_message(admin_id, f"📰 <b>Новая статья</b>\n\n<b>{escape(row['title'])}</b>\n\n<a href=\"{row['url']}\">Открыть статью</a>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Выбрать", callback_data=f"select:{row['id']}"), InlineKeyboardButton(text="Пропустить", callback_data=f"skip:{row['id']}")]]))
+        await db.mark_notified(row["id"])
     while True:
         try:
             for item in await fetch(settings.rss_feed_url):
                 if await db.add_news(item):
                     row = await db.get_news_by_url(item["url"])
-                    if row:
-                        for admin_id in settings.admin_ids:
-                            await bot.send_message(admin_id, f"📰 <b>Новая статья</b>\n\n<b>{escape(item['title'])}</b>\n\n<a href=\"{item['url']}\">Открыть статью</a>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Выбрать", callback_data=f"select:{row['id']}"), InlineKeyboardButton(text="Пропустить", callback_data=f"skip:{row['id']}")]]))
-                        await db.mark_notified(row["id"])
+                    if row: await notify(row)
+            for row in await db.list_unnotified_news(): await notify(row)
             await db.cleanup_old_articles(days=2)
         except Exception: logging.exception("RSS update failed")
         jitter = random.uniform(-120, 120)

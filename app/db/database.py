@@ -84,6 +84,9 @@ class Database:
         cur = await self.db.execute("SELECT * FROM news WHERE status='new' ORDER BY COALESCE(published_at, created_at) DESC LIMIT ? OFFSET ?", (limit, offset))
         return await cur.fetchall()
 
+    async def list_unnotified_news(self, limit=50):
+        cur = await self.db.execute("SELECT * FROM news WHERE status='new' AND notified=0 ORDER BY COALESCE(published_at, created_at) DESC LIMIT ?", (limit,)); return await cur.fetchall()
+
     async def get_news(self, news_id):
         cur = await self.db.execute("SELECT * FROM news WHERE id=?", (news_id,))
         return await cur.fetchone()
