@@ -5,13 +5,21 @@ from html import unescape
 async def extract(base_url: str, url: str) -> dict:
     async with httpx.AsyncClient(timeout=40) as client:
         health = await client.get(f"{base_url}/health"); health.raise_for_status()
-        response = await client.post(f"{base_url}/v1/extract", json={"url": url, "selectors": {"article": 'article[aria-labelledby="accessibility-article"]'}, "timeout": 30, "max_elements_per_selector": 1})
+        response = await client.post(f"{base_url}/v1/extract", json={"url": url, "selectors": {"article": 'article[aria-labelledby="accessibility-article"]', "image": 'meta[property="og:image"], meta[name="twitter:image"], article[aria-labelledby="accessibility-article"] img'}, "timeout": 30, "max_elements_per_selector": 1})
         response.raise_for_status(); data = response.json()
     element = data.get("results", {}).get("article", {}).get("elements", [{}])[0]
     text = element.get("text", "").strip()
     if not text: raise ValueError("Scrapit вернул пустой текст статьи")
     html = element.get("html", "")
     image = None
+    image_element = data.get("results", {}).get("image", {}).get("elements", [{}])[0]
+    image_html = image_element.get("html", "")
+    image_match = re.search(r'(?:content|src|data-src)=["\']([^"\']+)', image_html, re.I)
+    if image_match:
+        image = unescape(image_match.group(1))
+    if not image:
+        attributes = image_element.get("attributes", {}) or {}
+        image = attributes.get("content") or attributes.get("src") or attributes.get("data-src")
     async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
         page = await client.get(url, headers={"User-Agent": "NewsPublisher/1.0"})
         if page.is_success:
