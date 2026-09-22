@@ -119,7 +119,10 @@ def router_for(settings, db, scrapit, deepseek):
         publish_label = "🔁 Опубликовать снова" if publication else "✅ Опубликовать"
         extra = f"\n\nПоследнее сообщение в канале: {publication['message_id']}" if publication else ""
         text += extra
-        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit:{draft_id}"), InlineKeyboardButton(text="✍️ Переписать с промптом", callback_data=f"rewrite:{draft_id}")],[InlineKeyboardButton(text=publish_label, callback_data=f"publish:{draft_id}"),InlineKeyboardButton(text="🗑 Удалить", callback_data=f"delete:{draft_id}")]])
+        publish_buttons = [InlineKeyboardButton(text=publish_label, callback_data=f"publish:{draft_id}")]
+        if draft["image_url"]: publish_buttons.append(InlineKeyboardButton(text="📝 Без картинки", callback_data=f"publish_mode:text:{draft_id}"))
+        publish_buttons.append(InlineKeyboardButton(text="🗑 Удалить", callback_data=f"delete:{draft_id}"))
+        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit:{draft_id}"), InlineKeyboardButton(text="✍️ Переписать с промптом", callback_data=f"rewrite:{draft_id}")], publish_buttons])
         if draft["image_url"]:
             try: await message.answer_photo(draft["image_url"], caption="Изображение для этой статьи")
             except Exception: pass
