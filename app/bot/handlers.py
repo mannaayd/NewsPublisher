@@ -15,6 +15,8 @@ class EditState(StatesGroup):
     rewrite_prompt = State()
 
 def clean_html(value: str) -> str:
+    value = re.sub(r"</?p\s*>", "\n", value, flags=re.I)
+    value = re.sub(r"<br\s*/?>", "\n", value, flags=re.I)
     value = re.sub(r"<(?!/?(?:b|strong|i|em|u|s|a|code)(?:\s|>|/))[^>]+>", "", value, flags=re.I)
     value = re.sub(r"<(a)([^>]+)>", lambda m: m.group(0) if re.search(r'href=["\']https?://', m.group(0), re.I) else "", value, flags=re.I)
     return value[:4090]
@@ -105,7 +107,7 @@ def router_for(settings, db, scrapit, deepseek):
             article = await scrapit(row["url"]); await db.save_article(row["id"], article["text"], article["html"]); await db.set_news_status(row["id"], "extracted")
             prompt = await db.get_setting("deepseek_prompt", deepseek_service.SYSTEM)
             generated = await deepseek(row["title"], article["text"], row["url"], prompt)
-            draft_id = await db.add_draft(row["id"], generated["title"], generated["body_html"], generated.get("image_url") or article.get("image_url") or row["image_url"], row["url"], settings.deepseek_model)
+            draft_id = await db.add_draft(row["id"], generated["title"], clean_html(generated["body_html"]), generated.get("image_url") or article.get("image_url") or row["image_url"], row["url"], settings.deepseek_model)
             await db.set_news_status(row["id"], "draft"); await show_draft(call.message, db, draft_id)
         except Exception as exc: await call.message.answer(f"Не удалось подготовить статью: {escape(str(exc))}")
     @router.callback_query(F.data.startswith("skip:"))
@@ -142,7 +144,7 @@ def router_for(settings, db, scrapit, deepseek):
         try:
             base = await db.get_setting("deepseek_prompt", deepseek_service.SYSTEM)
             generated = await deepseek(draft["title"], article["article_text"], draft["source_url"], f"{base}\n\nДополнительная инструкция администратора:\n{custom_prompt}")
-            await db.update_draft_content(draft["id"], generated["title"], generated["body_html"], generated.get("image_url"))
+            await db.update_draft_content(draft["id"], generated["title"], clean_html(generated["body_html"]), generated.get("image_url"))
             await state.clear(); await show_draft(message, db, draft["id"])
         except Exception as exc:
             await state.clear(); await message.answer(f"Не удалось переписать пост: {escape(str(exc))}")
@@ -178,7 +180,7 @@ def router_for(settings, db, scrapit, deepseek):
             if article:
                 base = await db.get_setting("deepseek_prompt", deepseek_service.SYSTEM)
                 generated = await deepseek(draft["title"], article["article_text"], draft["source_url"], f"{base}\n\nСделай короткую версию для публикации с изображением. Уложись максимум в 850 символов HTML-текста, сохрани ключевые факты.")
-                await db.update_draft_content(draft["id"], generated["title"], generated["body_html"], draft["image_url"])
+                await db.update_draft_content(draft["id"], generated["title"], clean_html(generated["body_html"]), draft["image_url"])
                 draft = await db.get_draft(draft["id"])
         return await publish_draft(call, draft, with_image=mode == "image")
 
