@@ -7,6 +7,12 @@ services:
     user: "1000:1000"
     restart: unless-stopped
     init: true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,time; p='/tmp/news-channel-bot.heartbeat'; assert os.path.exists(p) and time.time()-os.path.getmtime(p)<90"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
     env_file:
       - .env
     environment:

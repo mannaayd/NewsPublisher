@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import random
+from pathlib import Path
+import time
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, InlineKeyboardMarkup, InlineKeyboardButton
 from html import escape
@@ -12,6 +14,13 @@ from app.bot.handlers import router_for
 from app.services.rss import fetch
 
 logging.basicConfig(level=logging.INFO)
+
+HEARTBEAT = Path("/tmp/news-channel-bot.heartbeat")
+
+async def heartbeat():
+    while True:
+        HEARTBEAT.touch()
+        await asyncio.sleep(30)
 
 async def poll_rss(settings, db, bot):
     async def notify(row):
@@ -44,7 +53,8 @@ async def main():
     dp = Dispatcher()
     dp.include_router(router_for(settings, db, lambda url: extract(settings.scrapit_base_url, url), lambda title, text, url, prompt=None: generate(settings.deepseek_api_key, settings.deepseek_model, title, text, url, prompt)))
     poller = asyncio.create_task(poll_rss(settings, db, bot))
+    heartbeat_task = asyncio.create_task(heartbeat())
     try: await dp.start_polling(bot)
-    finally: poller.cancel(); await db.close(); await bot.session.close()
+    finally: poller.cancel(); heartbeat_task.cancel(); await db.close(); await bot.session.close()
 
 if __name__ == "__main__": asyncio.run(main())
