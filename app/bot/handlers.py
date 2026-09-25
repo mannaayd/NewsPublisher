@@ -1,4 +1,6 @@
 from aiogram import Router, F
+from aiogram.types import ErrorEvent
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
@@ -25,6 +27,11 @@ def router_for(settings, db, scrapit, deepseek):
     router = Router()
     def allowed(user_id): return user_id in settings.admin_ids
     def menu(): return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📰 Новые новости", callback_data="news:0")],[InlineKeyboardButton(text="🔄 Обновить RSS", callback_data="rss")],[InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings")]])
+    @router.errors()
+    async def handle_callback_errors(event: ErrorEvent):
+        if isinstance(event.exception, TelegramBadRequest) and ("query is too old" in str(event.exception) or "query ID is invalid" in str(event.exception)):
+            return True
+        return False
     @router.message(CommandStart())
     async def start(message: Message):
         if not allowed(message.from_user.id): return await message.answer("У вас нет доступа к этому боту.")
